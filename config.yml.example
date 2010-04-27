@@ -1,0 +1,7 @@
+---
+notes_mail_file: http://your.domino.server/mail/your_mailfile.nsf 
+notes_username: username
+notes_password: password
+google_username: username@gmail.com
+google_password: password
+google_calendar_name: work
