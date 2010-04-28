@@ -35,7 +35,7 @@ class NotesCalendar
     response=req.post(@mail_file_url + "/?Login", "username=#{@username}&password=#{@password}")
 
     cookie = response["Set-Cookie"]
-    p "successfully logged into Lotus Notes"
+    p "logged into Lotus Notes"
     
     self.class.headers "Cookie" => cookie
     self.class.base_uri @mail_file_url
@@ -61,7 +61,8 @@ class NotesCalendar
       end_str = e['entrydata'].select {|x| x['name'] == "$146"}[0]['datetimelist']['datetime'] if end_str.nil?
       endtime = parse_datetime(end_str)
       
-      events << {:id => id, :subject => subject, :start => starttime, :end => endtime, :location => location}
+      
+      events << {:id => id+start_str, :subject => subject, :start => starttime, :end => endtime, :location => location}
     end
     
     events
@@ -89,14 +90,47 @@ end
 
 class GoogleCalendar
 
-  def calendar(calendar_name)
-    cal = GCal4Ruby::Calendar.find(@service, calendar_name, :scope => :first)
+  def create_event(event)
+    e = GCal4Ruby::Event.new(@cal, {:title => event[:subject], :start => event[:start], :end => event[:end], :where => event[:location]})
+    e.save
+    e
+  end
+  
+  def update_event(gevent, event)
+    gevent.title = event[:subject]
+    gevent.start = event[:start]
+    gevent.end   = event[:end]
+    gevent.where = event[:location]
+    gevent.save
+  end
+  
+  def set_calendar(calendar_name)
+    @cal = GCal4Ruby::Calendar.find(@service, calendar_name, :scope => :first)
   end
   
   def initialize(username, password)
     @service = GCal4Ruby::Service.new
+    # @service.debug = true
     @service.authenticate(username, password)
     p "logged into google calendar"
+  end
+  
+  def find(event_id)
+    GCal4Ruby::Event.find(@cal, event_id)
+  end
+  
+  def events
+     GCal4Ruby::Event.find(@cal, "", :range => {:start => Time.now - (60*60*24*90), :end => Time.now + (60*60*24*90)})
+  end
+  
+  
+  def delete_all
+    count = 0
+    @cal.events.each do |e|
+      title = e.title
+      count += 1 if e.delete
+    end
+    p "deleted #{count} events"
   end
 
 end
@@ -104,17 +138,14 @@ end
 def sync(calendar, notes_events, cache)
   
   notes_events.each do |ne|
-    if cache.key?(ne[:id])
-      event = GCal4Ruby::Event.find(calendar, cache[ne[:id]])
-      event.title = ne[:subject]
-      event.start = ne[:start]
-      event.end   = ne[:end]
-      event.where = ne[:location]
-      event.save
-      p "updated event #{event.title}"
+
+    gevent = cache.key?(ne[:id]) ? calendar.find(cache[ne[:id]]) : nil
+      
+    if !gevent.nil?
+      calendar.update_event(gevent, ne)
+      p "updated event #{gevent.title}"
     else
-      e = GCal4Ruby::Event.new(calendar, {:title => ne[:subject], :start => ne[:start], :end => ne[:end], :where => ne[:location]})
-      e.save
+      e = calendar.create_event(ne)
       cache[ne[:id]] = e.id
       p "created event #{e.title}"
     end
@@ -124,31 +155,21 @@ def sync(calendar, notes_events, cache)
 end
 
 
-
 def overwrite_all(calendar, notes_events)
 
-  calendar.events.each do |e|
-    p "deleting event #{e.title}"
-    if e.delete
-      e.save
-      p "deleted event"
-    else
-      p "couldn't delete event"
-    end
-  end
-  
-  p "deleted all events from google calendar"
-  # cache = {}
-
-  notes_events.each do |ne|
-    e = GCal4Ruby::Event.new(calendar, {:title => ne[:subject], :start => ne[:start], :end => ne[:end], :where => ne[:location]})
-    e.save
-    cache[ne[:id]] = e.id
-    p "created event #{e.title}"
-  end
-  
-  p cache
-  flush_cache(cache)
+  calendar.delete_all
+  calendar.delete_all
+  # p "deleted all events from google calendar"
+  cache = {}
+     
+   notes_events.each do |ne|
+     e = calendar.create_event(ne)
+     cache[ne[:id]] = e.id
+     p "created event #{e.title}"
+   end
+   
+   # p cache
+   flush_cache(cache)
   
 end
 
@@ -161,8 +182,11 @@ end
 
 
 notes = NotesCalendar.new(NOTES_MAIL_FILE, NOTES_USERNAME, NOTES_PASSWORD)
-gcal = GoogleCalendar.new(GOOGLE_USERNAME, GOOGLE_PASSWORD).calendar(GOOGLE_CALENDAR_NAME)
+gcal = GoogleCalendar.new(GOOGLE_USERNAME, GOOGLE_PASSWORD)
+gcal.set_calendar(GOOGLE_CALENDAR_NAME)
 
 cache = YAML::load(File.read(CACHE_FILE)) rescue {}
 sync(gcal, notes.events, cache)
+# overwrite_all(gcal,notes.events)
+
 
