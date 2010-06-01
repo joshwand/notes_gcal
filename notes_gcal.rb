@@ -89,38 +89,44 @@ class NotesCalendar
 end
 
 class GoogleCalendar
-
+  include GCal4Ruby
+  
   def create_event(event)
-    e = GCal4Ruby::Event.new(@cal, {:title => event[:subject], :start => event[:start], :end => event[:end], :where => event[:location]})
+    # p "@cal = #{@cal}"
+    e = Event.new(@service, {:calendar => @cal, :title => event[:subject], :start_time => event[:start], :end_time => event[:end], :where => event[:location]})
+    e.reminder = [{:minutes => 10, :method => :alert}]
     e.save
     e
   end
   
   def update_event(gevent, event)
     gevent.title = event[:subject]
-    gevent.start = event[:start]
-    gevent.end   = event[:end]
+    gevent.start_time = event[:start]
+    gevent.end_time   = event[:end]
     gevent.where = event[:location]
+    # gevent.reminder = [{:minutes => 10, :method => :alert}]
     gevent.save
   end
   
   def set_calendar(calendar_name)
-    @cal = GCal4Ruby::Calendar.find(@service, calendar_name, :scope => :first)
+    @cal = Calendar.find(@service, calendar_name, :scope => :first)
+    @cal = @cal[0] if @cal.is_a? Array
+    p "selected calendar #{@cal}" if !@cal.nil? 
   end
   
   def initialize(username, password)
-    @service = GCal4Ruby::Service.new
+    @service = Service.new
     # @service.debug = true
     @service.authenticate(username, password)
     p "logged into google calendar"
   end
   
   def find(event_id)
-    GCal4Ruby::Event.find(@cal, event_id)
+    Event.find(@service, {:id => event_id})
   end
   
   def events
-     GCal4Ruby::Event.find(@cal, "", :range => {:start => Time.now - (60*60*24*90), :end => Time.now + (60*60*24*90)})
+    Event.find(@service, "", :range => {:start => Time.now - (60*60*24*90), :end => Time.now + (60*60*24*90)})
   end
   
   
@@ -140,8 +146,8 @@ def sync(calendar, notes_events, cache)
   notes_events.each do |ne|
 
     gevent = cache.key?(ne[:id]) ? calendar.find(cache[ne[:id]]) : nil
-      
-    if !gevent.nil?
+    
+    if gevent != [] and !gevent.nil?
       calendar.update_event(gevent, ne)
       p "updated event #{gevent.title}"
     else
