@@ -95,7 +95,6 @@ class GoogleCalendar
   include GCal4Ruby
   
   def create_event(event)
-    # p "@cal = #{@cal}"
     e = Event.new(@service, {:calendar => @cal, :title => event[:subject], :start_time => event[:start], :end_time => event[:end], :where => event[:location]})
     e.reminder = [{:minutes => 10, :method => :alert}]
     e.save
@@ -137,7 +136,12 @@ class GoogleCalendar
     count = 0
     @cal.events.each do |e|
       title = e.title
-      count += 1 if e.delete
+      begin
+        count += 1 if e.delete
+      rescue Exception => e
+        p "something went wrong"
+        p e
+      end
     end
     p "deleted #{count} events"
   end
