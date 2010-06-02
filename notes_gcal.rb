@@ -50,6 +50,9 @@ class NotesCalendar
       subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][0] rescue nil
       location = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][1] rescue nil
       
+      # p e['entrydata'] if subject == nil
+      subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['text'] rescue nil if subject.nil?
+      
       # this index might be 3 if there is a callin number separate-- size=4
       # host = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][2] rescue nil
       
