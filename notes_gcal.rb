@@ -150,21 +150,44 @@ end
 
 def sync(calendar, notes_events, cache)
   
+  count_new = 0
+  count_updated = 0
+  count_deleted = 0
+  
+  new_cache = {}
+  
   notes_events.each do |ne|
+   
+     gevent = cache.key?(ne[:id]) ? calendar.find(cache[ne[:id]]) : nil
+     
+     if gevent != [] and !gevent.nil?
+       calendar.update_event(gevent, ne)
+       new_cache[ne[:id]] = gevent.id
+   
+       p "updated event #{gevent.title}"
+       count_updated += 1
+     else
+       e = calendar.create_event(ne)
+       new_cache[ne[:id]] = e.id
+       p "created event #{e.title}"
+       count_new += 1
+     end
+   end
+   # p new_cache
+  
+  calendar.events.each do |e|
+    # p "#{e.id} : #{e.title}"
 
-    gevent = cache.key?(ne[:id]) ? calendar.find(cache[ne[:id]]) : nil
-    
-    if gevent != [] and !gevent.nil?
-      calendar.update_event(gevent, ne)
-      p "updated event #{gevent.title}"
-    else
-      e = calendar.create_event(ne)
-      cache[ne[:id]] = e.id
-      p "created event #{e.title}"
+    if !new_cache.values.include?(e.id) and e.start_time >= Time.now
+      p "no event found for event #{e.title} - #{e.start_time} in #{e.calendar.title}... deleting"
+      e.delete
+      count_deleted += 1
     end
   end
   
-  flush_cache(cache)
+  print "done!\ncreated: #{count_new}\nupdated: #{count_updated}\ndeleted: #{count_deleted}\n"
+  
+  flush_cache(new_cache)
 end
 
 
@@ -201,5 +224,9 @@ gcal.set_calendar(GOOGLE_CALENDAR_NAME)
 cache = YAML::load(File.read(CACHE_FILE)) rescue {}
 sync(gcal, notes.events, cache)
 # overwrite_all(gcal,notes.events)
+# gcal.events.each do |e|
+#   # p "#{e.id} : #{e.title}"
+#   p "#{e.title} #{e.start_time} not found in cache: #{e.start_time >= Time.now}" if !cache.values.include?(e.id) #and (e.start_time >= Time.now)
+# end
 
 
