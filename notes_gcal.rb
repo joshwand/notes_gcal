@@ -128,7 +128,7 @@ class GoogleCalendar
   end
   
   def events
-    Event.find(@service, "", :range => {:start => Time.now - (60*60*24*90), :end => Time.now + (60*60*24*90)})
+    Event.find(@service, "", {'start-min' => (Time.now - (60*60*24*90)).utc.xmlschema, 'start-max' => (Time.now + (60*60*24*90)).utc.xmlschema, :calendar => @cal.id, 'max-results' => 200})
   end
   
   
