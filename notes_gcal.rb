@@ -44,28 +44,49 @@ class NotesCalendar
     events = []
   
     response['viewentries']['viewentry'].each do |e|
-      
-      id = e['unid']
+      begin
+        id = e['unid']
 
-      subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][0] rescue nil
-      location = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][1] rescue nil
+        subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][0] rescue nil
+        location = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][1] rescue nil
       
-      # p e['entrydata'] if subject == nil
-      subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['text'] rescue nil if subject.nil?
+        # p e['entrydata'] if subject == nil
+        subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['text'] if subject.nil?
       
-      # this index might be 3 if there is a callin number separate-- size=4
-      # host = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][2] rescue nil
+        # this index might be 3 if there is a callin number separate-- size=4
+        # host = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][2] rescue nil
       
-      start_str = e['entrydata'].select {|x| x['name'] == "$144"}[0]['datetime']
-      start_str = e['entrydata'].select {|x| x['name'] == "$144"}[0]['datetimelist']['datetime'] if start_str.nil? 
-      starttime = parse_datetime(start_str)
+        start_str = e['entrydata'].select {|x| x['name'] == "$144"}[0]['datetime'] rescue nil
+        start_str = e['entrydata'].select {|x| x['name'] == "$144"}[0]['datetimelist']['datetime'] rescue nil if start_str.nil? 
+
+        # maybe it's an all day event?
+        if start_str.nil? 
+          start_str = e['entrydata'].select {|x| x['name'] == "$134"}[0]['datetime'] rescue nil
+          start_str = e['entrydata'].select {|x| x['name'] == "$134"}[0]['datetimelist']['datetime'] rescue nil if start_str.nil?
+          
+          all_day = true
+        end
+        
+        #give up if we still don't have a time
+        raise RuntimeError if start_str.nil? 
+
+        starttime = parse_datetime(start_str)
+    
+        if all_day === true
+          endtime = starttime
+        else
+          end_str = e['entrydata'].select {|x| x['name'] == "$146"}[0]['datetime']
+          end_str = e['entrydata'].select {|x| x['name'] == "$146"}[0]['datetimelist']['datetime'] if end_str.nil?
+          endtime = parse_datetime(end_str)
+        end
       
-      end_str = e['entrydata'].select {|x| x['name'] == "$146"}[0]['datetime']
-      end_str = e['entrydata'].select {|x| x['name'] == "$146"}[0]['datetimelist']['datetime'] if end_str.nil?
-      endtime = parse_datetime(end_str)
-      
-      
-      events << {:id => id+start_str, :subject => subject, :start => starttime, :end => endtime, :location => location}
+        events << {:id => id+start_str, :subject => subject, :start => starttime, :end => endtime, :location => location, :all_day => all_day}
+      rescue Exception => exc
+        p exc
+        p exc.backtrace
+        p e
+        quit
+      end
     end
     
     events
@@ -96,6 +117,7 @@ class GoogleCalendar
   
   def create_event(event)
     e = Event.new(@service, {:calendar => @cal, :title => event[:subject], :start_time => event[:start], :end_time => event[:end], :where => event[:location]})
+    e.all_day = true if event[:all_day] === true
     e.reminder = [{:minutes => 10, :method => :alert}]
     e.save
     e
@@ -106,6 +128,7 @@ class GoogleCalendar
     gevent.start_time = event[:start]
     gevent.end_time   = event[:end]
     gevent.where = event[:location]
+    gevent.all_day = event[:all_day]
     # gevent.reminder = [{:minutes => 10, :method => :alert}]
     gevent.save
   end
