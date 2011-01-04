@@ -1,0 +1,31 @@
+h1. notes_gcal.rb
+
+Sync your Lotus Notes Calendar to Google Calendar (one-way sync).
+
+h2. Homepage
+
+http://github.com/joshwand/notes_gcal
+
+h2. Installation
+
+<pre>
+$ gem install bundler
+$ bundle install
+$ cp config.yml.example config.yml
+# enter your Lotus Notes and Google Account info
+$ ruby notes_gcal.rb
+</pre>
+
+h2. Caveats
+
+This will *ERASE* any events on your google calendar that aren't already in Lotus Notes! I *HIGHLY* recommend creating a calendar in Google Calendar dedicated to Lotus Notes events.
+
+h2. Author
+
+* Josh Wand - "github":http://github.com/joshwand
+
+h2. TODO
+
+Fix sync algorithm to only delete events that exist in the cache but that don't exist anymore in lotus notes.
+
+Does Google offer any non-plaintext auth methods?
