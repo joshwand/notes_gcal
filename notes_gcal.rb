@@ -120,7 +120,7 @@ class GoogleCalendar
   def create_event(event)
     e = Event.new(@service, {:calendar => @cal, :title => event[:subject], :start_time => event[:start], :end_time => event[:end], :where => event[:location]})
     e.all_day = true if event[:all_day] === true
-    e.reminder = [{:minutes => 10, :method => :alert}]
+    e.reminder = [{:minutes => 10, :method => 'alert'}]
     e.save
     e
   end
