@@ -175,42 +175,53 @@ end
 
 def sync(calendar, notes_events, cache)
   
+  count_notes_events = 0
   count_new = 0
   count_updated = 0
   count_deleted = 0
   
+  
   new_cache = {}
   
-  notes_events.each do |ne|
-   
-     gevent = cache.key?(ne[:id]) ? calendar.find(cache[ne[:id]]) : nil
-     
-     if gevent != [] and !gevent.nil?
-       calendar.update_event(gevent, ne)
-       new_cache[ne[:id]] = gevent.id
-   
-       p "updated event #{gevent.title}"
-       count_updated += 1
+  notes_events.each do |notesevent|
+        
+    gevent = cache.key?(notesevent[:id]) ? calendar.find(cache[notesevent[:id]][:gcal_id]) : nil
+         
+    if gevent != [] and !gevent.nil? 
+
+       cached_event_without_gcal_id = cache[notesevent[:id]].reject {|key, value| key == :gcal_id}
+
+       # only update if the event has changed
+       if !notesevent.eql?(cached_event_without_gcal_id)
+         calendar.update_event(gevent, notesevent)
+         p "updated event #{gevent.title}"
+         count_updated += 1
+       end 
+         
+       new_cache[notesevent[:id]] = notesevent.merge({:gcal_id => gevent.id})
+       
      else
-       e = calendar.create_event(ne)
-       new_cache[ne[:id]] = e.id
-       p "created event #{e.title}"
+       new_gevent = calendar.create_event(notesevent)
+       new_cache[notesevent[:id]] = notesevent.merge({:gcal_id => new_gevent.id})
+       p "created new event: #{new_gevent.title}"
        count_new += 1
      end
+     count_notes_events += 1
    end
-   # p new_cache
   
-  calendar.events.each do |e|
-    # p "#{e.id} : #{e.title}"
+  calendar.events.each do |googleevent|
 
-    if !new_cache.values.include?(e.id) and e.start_time >= Time.now
-      p "no event found for event #{e.title} - #{e.start_time} in #{e.calendar.title}... deleting"
-      e.delete
+    if (new_cache.values.select {|c| c[:gcal_id] == googleevent.id}.size == 0 and 
+      googleevent.start_time >= Time.now and 
+      cache.values.select {|c| c[:gcal_id] == googleevent.id}.size > 0)
+      
+      p "looks like event #{googleevent.title} - #{googleevent.start_time} in #{googleevent.calendar.title} was deleted! deleting it...."
+      googleevent.delete
       count_deleted += 1
     end
   end
   
-  print "done!\ncreated: #{count_new}\nupdated: #{count_updated}\ndeleted: #{count_deleted}\n"
+  print "done! For #{count_notes_events} events in Notes, we:\ncreated: #{count_new}\nupdated: #{count_updated}\ndeleted: #{count_deleted}\n"
   
   flush_cache(new_cache)
 end
@@ -220,16 +231,15 @@ def overwrite_all(calendar, notes_events)
 
   calendar.delete_all
   calendar.delete_all
-  # p "deleted all events from google calendar"
+  p "deleted all events from google calendar"
   cache = {}
      
-   notes_events.each do |ne|
-     e = calendar.create_event(ne)
-     cache[ne[:id]] = e.id
-     p "created event #{e.title}"
+   notes_events.each do |notesevent|
+     new_gevent = calendar.create_event(notesevent)
+     cache[notesevent[:id]] = notesevent.merge({:gcal_id => new_gevent.id})
+     p "created event #{new_gevent.title}"
    end
-   
-   # p cache
+
    flush_cache(cache)
   
 end
@@ -247,11 +257,11 @@ gcal = GoogleCalendar.new(GOOGLE_USERNAME, GOOGLE_PASSWORD)
 gcal.set_calendar(GOOGLE_CALENDAR_NAME)
 
 cache = YAML::load(File.read(CACHE_FILE)) rescue {}
-sync(gcal, notes.events, cache)
+
+# uncomment to wipe out the whole calendar
 # overwrite_all(gcal,notes.events)
-# gcal.events.each do |e|
-#   # p "#{e.id} : #{e.title}"
-#   p "#{e.title} #{e.start_time} not found in cache: #{e.start_time >= Time.now}" if !cache.values.include?(e.id) #and (e.start_time >= Time.now)
-# end
+
+sync(gcal, notes.events, cache)
+
 
 
