@@ -37,14 +37,18 @@ class NotesCalendar
     response=req.post(@mail_file_url + "/?Login", "username=#{@username}&password=#{@password}")
 
     cookie = response["Set-Cookie"]
-    p "logged into Lotus Notes"
+    log("logged into Lotus Notes")
     
     self.class.headers "Cookie" => cookie
     self.class.base_uri @mail_file_url
     response = self.class.get(CALENDAR_PATH)
   
     events = []
-  
+    
+    File.open("/tmp/notescal.xml", "w") do |file|
+      file.write(response);
+    end
+    
     response['viewentries']['viewentry'].each do |e|
       begin
         id = e['unid']
@@ -52,7 +56,7 @@ class NotesCalendar
         subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][0] rescue nil
         location = e['entrydata'].select {|x| x['name'] == "$147"}[0]['textlist']['text'][1] rescue nil
       
-        # p e['entrydata'] if subject == nil
+        # log(e['entrydata']) if subject == nil
         subject = e['entrydata'].select {|x| x['name'] == "$147"}[0]['text'] if subject.nil?
       
         # this index might be 3 if there is a callin number separate-- size=4
@@ -84,9 +88,9 @@ class NotesCalendar
       
         events << {:id => id+start_str, :subject => subject, :start => starttime, :end => endtime, :location => location, :all_day => all_day}
       rescue Exception => exc
-        p exc
-        p exc.backtrace
-        p e
+        log(exc)
+        log(exc.backtrace)
+        log(e)
         quit
       end
     end
@@ -138,14 +142,14 @@ class GoogleCalendar
   def set_calendar(calendar_name)
     @cal = Calendar.find(@service, calendar_name, :scope => :first)
     @cal = @cal[0] if @cal.is_a? Array
-    p "selected calendar #{@cal}" if !@cal.nil? 
+    log("selected calendar: #{@cal.title}") if !@cal.nil?
   end
   
   def initialize(username, password)
     @service = Service.new
     # @service.debug = true
     @service.authenticate(username, password)
-    p "logged into google calendar"
+    log("logged into google calendar")
   end
   
   def find(event_id)
@@ -164,11 +168,11 @@ class GoogleCalendar
       begin
         count += 1 if e.delete
       rescue Exception => e
-        p "something went wrong"
-        p e
+        log("something went wrong")
+        log(e)
       end
     end
-    p "deleted #{count} events"
+    log("deleted #{count} events")
   end
 
 end
@@ -194,7 +198,7 @@ def sync(calendar, notes_events, cache)
        # only update if the event has changed
        if !notesevent.eql?(cached_event_without_gcal_id)
          calendar.update_event(gevent, notesevent)
-         p "updated event #{gevent.title}"
+         log("updated event #{gevent.title}")
          count_updated += 1
        end 
          
@@ -203,7 +207,7 @@ def sync(calendar, notes_events, cache)
      else
        new_gevent = calendar.create_event(notesevent)
        new_cache[notesevent[:id]] = notesevent.merge({:gcal_id => new_gevent.id})
-       p "created new event: #{new_gevent.title}"
+       log("created new event: #{new_gevent.title}")
        count_new += 1
      end
      count_notes_events += 1
@@ -215,7 +219,7 @@ def sync(calendar, notes_events, cache)
       googleevent.start_time >= Time.now and 
       cache.values.select {|c| c[:gcal_id] == googleevent.id}.size > 0)
       
-      p "looks like event #{googleevent.title} - #{googleevent.start_time} in #{googleevent.calendar.title} was deleted! deleting it...."
+      log("looks like event #{googleevent.title} - #{googleevent.start_time} in #{googleevent.calendar.title} was deleted! deleting it....")
       googleevent.delete
       count_deleted += 1
     end
@@ -231,13 +235,13 @@ def overwrite_all(calendar, notes_events)
 
   calendar.delete_all
   calendar.delete_all
-  p "deleted all events from google calendar"
+  log("deleted all events from google calendar")
   cache = {}
      
    notes_events.each do |notesevent|
      new_gevent = calendar.create_event(notesevent)
      cache[notesevent[:id]] = notesevent.merge({:gcal_id => new_gevent.id})
-     p "created event #{new_gevent.title}"
+     log("created event #{new_gevent.title}")
    end
 
    flush_cache(cache)
@@ -251,6 +255,9 @@ def flush_cache(cache)
   end
 end
 
+def log(msg)
+  p "#{Time.now} | #{msg}"
+end
 
 notes = NotesCalendar.new(NOTES_MAIL_FILE, NOTES_USERNAME, NOTES_PASSWORD)
 gcal = GoogleCalendar.new(GOOGLE_USERNAME, GOOGLE_PASSWORD)
